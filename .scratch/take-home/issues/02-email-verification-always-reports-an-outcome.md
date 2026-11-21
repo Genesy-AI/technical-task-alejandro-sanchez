@@ -81,6 +81,8 @@ Decided with the user on 2026-11-21:
   - Not checked in a browser. The dev stack was in use.
 - [x] The result toast shows the counts: valid, invalid, and could not be verified.
   - Not checked in a browser. Unit tests cover the message.
+- [x] The result toast names each email that could not be verified: up to three, then "and N more". A partial failure uses a warning style, and a toast with failed emails stays open for 8 seconds.
+  - Added after review on 2026-11-21. Unit tests cover the message and the tone.
 - [x] The backend uses one shared Temporal connection. An error does not leak a connection.
 - [x] Workflow tests cover the valid, invalid, and timeout-then-failed paths.
 

@@ -17,6 +17,7 @@ export type LeadsVerifyEmailsOutput = {
   errors: Array<{
     leadId: number
     leadName: string
+    email: string
     error: string
   }>
 }

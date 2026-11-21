@@ -32,6 +32,8 @@ export interface EmailVerificationResult {
 export interface EmailVerificationError {
   leadId: number
   leadName: string
+  /** The email that could not be verified. The UI shows it to the user. */
+  email: string
   error: string
 }
 
@@ -70,7 +72,12 @@ function toLeadOutcome(
   const error = settled.reason instanceof Error ? settled.reason.message : UNKNOWN_ERROR_MESSAGE
   return {
     isFulfilled: false,
-    error: { leadId: lead.id, leadName: `${lead.firstName} ${lead.lastName}`.trim(), error },
+    error: {
+      leadId: lead.id,
+      leadName: `${lead.firstName} ${lead.lastName}`.trim(),
+      email: lead.email,
+      error,
+    },
   }
 }
 

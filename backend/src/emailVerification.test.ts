@@ -69,7 +69,14 @@ describe('verifyLeadEmails', () => {
         { leadId: 1, emailVerified: true },
         { leadId: 2, emailVerified: false },
       ],
-      errors: [{ leadId: 3, leadName: 'Jane Smith', error: 'Workflow execution failed' }],
+      errors: [
+        {
+          leadId: 3,
+          leadName: 'Jane Smith',
+          email: 'jane.smith@example.com',
+          error: 'Workflow execution failed',
+        },
+      ],
     })
     expect(dependencies.saveVerification).toHaveBeenCalledTimes(2)
     expect(dependencies.saveVerification).toHaveBeenCalledWith(1, true)
@@ -98,7 +105,9 @@ describe('verifyLeadEmails', () => {
       validCount: 0,
       failedCount: 1,
       results: [],
-      errors: [{ leadId: 1, leadName: 'Ada Lovelace', error: 'Database is locked' }],
+      errors: [
+        { leadId: 1, leadName: 'Ada Lovelace', email: 'ada@example.com', error: 'Database is locked' },
+      ],
     })
   })
 })

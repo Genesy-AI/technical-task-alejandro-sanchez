@@ -4,10 +4,23 @@ import toast from 'react-hot-toast'
 import { api } from '../api'
 import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
-import { summarizeEmailVerification } from '../utils/emailVerificationSummary'
+import { EmailVerificationSummary, summarizeEmailVerification } from '../utils/emailVerificationSummary'
 
 // One toast id, so that the result toast replaces the loading toast.
 const VERIFY_EMAILS_TOAST_ID = 'verify-emails'
+// A toast that names failed emails stays longer, so the user can read the list.
+const FAILED_EMAILS_TOAST_DURATION_MS = 8000
+
+function showVerificationSummary({ message, tone }: EmailVerificationSummary): void {
+  const options = { id: VERIFY_EMAILS_TOAST_ID, style: { whiteSpace: 'pre-line' as const } }
+  if (tone === 'success') {
+    toast.success(message, options)
+  } else if (tone === 'warning') {
+    toast(message, { ...options, icon: '⚠️', duration: FAILED_EMAILS_TOAST_DURATION_MS })
+  } else {
+    toast.error(message, { ...options, duration: FAILED_EMAILS_TOAST_DURATION_MS })
+  }
+}
 
 export const LeadsList: FC = () => {
   const [selectedLeads, setSelectedLeads] = useState<number[]>([])
@@ -49,12 +62,7 @@ export const LeadsList: FC = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
-      const summary = summarizeEmailVerification(data)
-      if (summary.isError) {
-        toast.error(summary.message, { id: VERIFY_EMAILS_TOAST_ID })
-      } else {
-        toast.success(summary.message, { id: VERIFY_EMAILS_TOAST_ID })
-      }
+      showVerificationSummary(summarizeEmailVerification(data))
     },
     onError: () => {
       toast.error('Failed to verify emails. Please try again.', { id: VERIFY_EMAILS_TOAST_ID })
