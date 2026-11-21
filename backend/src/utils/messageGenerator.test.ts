@@ -206,4 +206,49 @@ describe('generateMessageFromTemplate', () => {
       expect(result).toBe('Hi John 😊 from TechCorp 🚀!')
     })
   })
+
+  describe('new lead fields', () => {
+    const contactLead: Lead = {
+      firstName: 'Ana',
+      phoneNumber: '+1-280-754-0462x2154',
+      yearsAtCompany: 7,
+      linkedinUrl: 'https://www.linkedin.com/in/ana-ruiz',
+    }
+
+    it('should replace the phone, years, and LinkedIn fields', () => {
+      const template = 'Call {phoneNumber}. {yearsAtCompany} years. Profile: {linkedinUrl}'
+      const result = generateMessageFromTemplate(template, contactLead)
+      expect(result).toBe('Call +1-280-754-0462x2154. 7 years. Profile: https://www.linkedin.com/in/ana-ruiz')
+    })
+
+    it('should insert years 0 as a value', () => {
+      const result = generateMessageFromTemplate('{yearsAtCompany} years', {
+        ...contactLead,
+        yearsAtCompany: 0,
+      })
+      expect(result).toBe('0 years')
+    })
+
+    it('should throw an error with the label when a new field is empty', () => {
+      expect(() => generateMessageFromTemplate('Call {phoneNumber}', { firstName: 'Bob' })).toThrow(
+        'Missing required field: phoneNumber (Phone number)'
+      )
+      expect(() =>
+        generateMessageFromTemplate('{yearsAtCompany} years', { firstName: 'Bob', yearsAtCompany: null })
+      ).toThrow('Missing required field: yearsAtCompany (Years at company)')
+    })
+  })
+
+  describe('replacement patterns in field values', () => {
+    it.each(['Price $& now', 'Cost $1', 'Pay $$ here', "Before $` after $'"])(
+      'should insert the value "%s" as it is',
+      (patternValue) => {
+        const result = generateMessageFromTemplate('Company: {companyName}', {
+          firstName: 'Ana',
+          companyName: patternValue,
+        })
+        expect(result).toBe(`Company: ${patternValue}`)
+      }
+    )
+  })
 })

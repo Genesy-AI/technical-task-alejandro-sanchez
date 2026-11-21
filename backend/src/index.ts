@@ -4,6 +4,7 @@ import { runEmailVerificationWorkflow, verifyLeadEmails } from './emailVerificat
 import { getTemporalClient } from './temporalClient'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
 import { normalizeCountryCode } from './utils/countryCode'
+import { listTemplateFieldSummaries } from './utils/templateFields'
 import { runTemporalWorker } from './worker'
 const prisma = new PrismaClient()
 const app = express()
@@ -37,6 +38,11 @@ app.post('/leads', async (req: Request, res: Response) => {
     },
   })
   res.json(lead)
+})
+
+// Declare this route before `/leads/:id`. If not, Express sends the request to `/leads/:id`.
+app.get('/leads/template-fields', (req: Request, res: Response) => {
+  res.json(listTemplateFieldSummaries())
 })
 
 app.get('/leads/:id', async (req: Request, res: Response) => {
