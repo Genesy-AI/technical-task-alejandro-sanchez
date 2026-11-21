@@ -22,4 +22,9 @@ model lead {
   phoneNumber    String?
   yearsAtCompany Int?
   linkedinUrl    String?
+  // One of `running`, `found`, `not_found`, or `failed`. SQLite has no enums, so the code names the values.
+  phoneEnrichmentStatus String?
+  phoneProvider         String?
+  phoneCountryCode      String?
+  phoneEnrichedAt       DateTime?
 }
