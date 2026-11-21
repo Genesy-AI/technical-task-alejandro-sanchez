@@ -67,15 +67,24 @@ Decided with the user on 2026-11-21:
 
 ## Acceptance criteria
 
-- [ ] The verify activity has an explicit timeout and a retry policy with a maximum number of attempts.
+- [x] The verify activity has an explicit timeout and a retry policy with a maximum number of attempts.
 - [ ] A verification request always returns. The worst case is less than 15 seconds, for any number of leads.
-- [ ] A lead that runs out of attempts stays unknown in the table. The result toast counts it as "could not be verified".
-- [ ] One slow or failed lead does not delay the results of the other leads.
-- [ ] The workflow ID is `verify-email-<leadId>`. A second request for a lead that is already running does not start a duplicate workflow.
-- [ ] The UI shows that verification is in progress, and the verify action is disabled until it ends.
-- [ ] The result toast shows the counts: valid, invalid, and could not be verified.
-- [ ] The backend uses one shared Temporal connection. An error does not leak a connection.
-- [ ] Workflow tests cover the valid, invalid, and timeout-then-failed paths.
+  - Not fully met. The workflow test measures 9.04 s of workflow time when all attempts time out. The request always returns, because each workflow has a 30 s execution timeout.
+  - The worker runs at most 100 activities at the same time (SDK default). With more slow leads than that, queued attempts wait, and the bound becomes the 30 s execution timeout.
+  - The end-to-end HTTP time was not measured. The manual app test (plan step 10) is left for the user.
+- [x] A lead that runs out of attempts stays unknown in the table. The result toast counts it as "could not be verified".
+  - The endpoint does not write `emailVerified` for a failed lead. A lead with an earlier result keeps that result.
+- [x] One slow or failed lead does not delay the results of the other leads.
+  - All leads run in parallel. The response is synchronous, so it comes when the slowest lead ends (option A).
+- [x] The workflow ID is `verify-email-<leadId>`. A second request for a lead that is already running does not start a duplicate workflow.
+- [x] The UI shows that verification is in progress, and the verify action is disabled until it ends.
+  - Not checked in a browser. The dev stack was in use.
+- [x] The result toast shows the counts: valid, invalid, and could not be verified.
+  - Not checked in a browser. Unit tests cover the message.
+- [x] The result toast names each email that could not be verified: up to three, then "and N more". A partial failure uses a warning style, and a toast with failed emails stays open for 8 seconds.
+  - Added after review on 2026-11-21. Unit tests cover the message and the tone.
+- [x] The backend uses one shared Temporal connection. An error does not leak a connection.
+- [x] Workflow tests cover the valid, invalid, and timeout-then-failed paths.
 
 ## Out of scope
 
