@@ -75,14 +75,15 @@ Decided with the user on 2026-11-21:
 
 ## Acceptance criteria
 
-- [ ] The CSV preview shows the country of each row and a warning for each invalid code. The warning names the value.
-- [ ] A row with an invalid country code stays importable. It imports with no country code.
-- [ ] Valid codes are normalized: trimmed and uppercased (`es` becomes `ES`).
-- [ ] `UK` imports as `GB` with no warning.
-- [ ] The bulk import endpoint also checks country codes. It does not depend on the client check alone.
-- [ ] The import result tells the user how many country codes the app dropped.
-- [ ] A new migration changes stored `UK` values to `GB`. Existing migration files stay unchanged.
-- [ ] Unit tests cover valid, lowercase, three-letter, numeric, empty, and `UK` values, in both apps.
+- [x] The CSV preview shows the country of each row and a warning for each invalid code. The warning names the value.
+  - Not checked in the browser. The dev stack was in use, so the manual test (plan step 9) is open for the user. An automated run of `parseCsv` on `docs/leads-with-errors.csv` kept no `XXX` or `12`.
+- [x] A row with an invalid country code stays importable. It imports with no country code.
+- [x] Valid codes are normalized: trimmed and uppercased (`es` becomes `ES`).
+- [x] `UK` imports as `GB` with no warning.
+- [x] The bulk import endpoint also checks country codes. It does not depend on the client check alone.
+- [x] The import result tells the user how many country codes the app dropped.
+- [x] A new migration changes stored `UK` values to `GB`. Existing migration files stay unchanged.
+- [x] Unit tests cover valid, lowercase, three-letter, numeric, empty, and `UK` values, in both apps.
 
 ## Out of scope
 
