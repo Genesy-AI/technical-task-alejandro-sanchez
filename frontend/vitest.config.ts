@@ -12,4 +12,10 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
     },
   },
+  server: {
+    fs: {
+      // Tests read the example CSV files in the repo `docs/` folder, which is outside the app root.
+      allow: [__dirname, resolve(__dirname, '../docs')],
+    },
+  },
 })
