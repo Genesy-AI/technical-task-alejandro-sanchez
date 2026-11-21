@@ -4,6 +4,9 @@ import { runEmailVerificationWorkflow, verifyLeadEmails } from './emailVerificat
 import { getTemporalClient } from './temporalClient'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
 import { normalizeCountryCode } from './utils/countryCode'
+import { normalizeLinkedinUrl } from './utils/linkedinUrl'
+import { normalizePhoneNumber } from './utils/phoneNumber'
+import { normalizeYearsAtCompany } from './utils/yearsAtCompany'
 import { listTemplateFieldSummaries } from './utils/templateFields'
 import { runTemporalWorker } from './worker'
 const prisma = new PrismaClient()
@@ -225,10 +228,14 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
 
     let importedCount = 0
     let countryCodesDropped = 0
+    let yearsAtCompanyDropped = 0
+    let linkedinUrlsDropped = 0
     const errors: Array<{ lead: any; error: string }> = []
 
     for (const lead of uniqueLeads) {
       const { countryCode, isDropped } = normalizeCountryCode(lead.countryCode)
+      const years = normalizeYearsAtCompany(lead.yearsAtCompany)
+      const linkedin = normalizeLinkedinUrl(lead.linkedinUrl)
       try {
         await prisma.lead.create({
           data: {
@@ -238,11 +245,20 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
             jobTitle: lead.jobTitle ? lead.jobTitle.trim() : null,
             countryCode,
             companyName: lead.companyName ? lead.companyName.trim() : null,
+            phoneNumber: normalizePhoneNumber(lead.phoneNumber),
+            yearsAtCompany: years.yearsAtCompany,
+            linkedinUrl: linkedin.linkedinUrl,
           },
         })
         importedCount++
         if (isDropped) {
           countryCodesDropped++
+        }
+        if (years.isDropped) {
+          yearsAtCompanyDropped++
+        }
+        if (linkedin.isDropped) {
+          linkedinUrlsDropped++
         }
       } catch (error) {
         errors.push({
@@ -258,6 +274,8 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
       duplicatesSkipped: validLeads.length - uniqueLeads.length,
       invalidLeads: leads.length - validLeads.length,
       countryCodesDropped,
+      yearsAtCompanyDropped,
+      linkedinUrlsDropped,
       errors,
     })
   } catch (error) {
