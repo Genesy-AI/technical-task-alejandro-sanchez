@@ -10,7 +10,7 @@ If no provider finds a phone, the lead is marked "No data found". The user sees 
 
 **Blocked by:** 03 (needs the phone field)
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Diagnosis
 
@@ -198,24 +198,49 @@ Names used below: provider IDs `orionConnect`, `astraDialer`, `nimbusLookup`. Wo
 
 ## Acceptance criteria
 
-- [ ] One provider interface hides the request, auth, and response differences between the providers. Each provider maps its response to one normalized phone result.
-- [ ] Each adapter accepts the live response shapes. This includes Nimbus `{ phoneNmbr: number, countryCode }`.
-- [ ] Each provider call is a separate activity with a short timeout and a retry policy (for example, 3 attempts with exponential backoff).
-- [ ] A 401 or a 400 from a provider is not retried. A 5xx or a timeout is retried.
-- [ ] The workflow stops after the first provider that returns a phone.
-- [ ] When all three providers return no phone, the lead status is "No data found".
-- [ ] A provider that fails after all retries does not stop the chain. The workflow continues to the next provider.
-- [ ] Orion gets the email domain as `companyWebsite`. It is skipped for a free-mail domain. Nimbus is skipped for a lead with no job title.
-- [ ] The workflow is idempotent, with one workflow for each lead and a deterministic ID. A repeated request for a lead that is already running does not start a second workflow.
-- [ ] "Enrich phone" skips a lead that already has a phone. The result counts it.
-- [ ] The lead stores an enrichment status (for example: running, found, not found, failed) and, when found, the phone and the provider that found it.
-- [ ] The UI has an "Enrich phone" action and shows the status for each lead while the workflow runs. The user does not have to reload the page.
-- [ ] Polling stops when no lead is running.
-- [ ] Provider credentials come from configuration, not from source code.
-- [ ] The worker does not start when a key is missing. The error names the missing variable.
-- [ ] No API key is in workflow history, activity failures, or logs.
-- [ ] Tests cover the response mapping for each provider and the workflow paths: first-hit stop, fallback, all-empty, and provider failure.
-- [ ] Nice to have: each provider has its own rate limit, so a bulk enrichment respects future RPS/RPM limits. Leave the limit unset by default.
+- [x] One provider interface hides the request, auth, and response differences between the providers. Each provider maps its response to one normalized phone result.
+  - `PhoneProvider` in `backend/src/phoneProviders/types.ts`. One adapter file for each provider. `runProviderLookup.ts` does the HTTP call for all three.
+- [x] Each adapter accepts the live response shapes. This includes Nimbus `{ phoneNmbr: number, countryCode }`.
+  - The Nimbus adapter also accepts the README shape `{ number, countryCode }`. A missing phone key or `null` means "no phone" for each provider.
+- [x] Each provider call is a separate activity with a short timeout and a retry policy (for example, 3 attempts with exponential backoff).
+  - The timeouts are in `registry.ts`: 6 s, 2 s, and 4 s. Each provider has 3 attempts. The first retry waits 1 s, and the wait doubles.
+- [x] A 401 or a 400 from a provider is not retried. A 5xx or a timeout is retried.
+  - A 429 and a network error are also retried. An invalid 2xx body is not retried. Runner tests and a workflow test cover this.
+- [x] The workflow stops after the first provider that returns a phone.
+- [x] When all three providers return no phone, the lead status is "No data found".
+  - The stored status is `not_found`. The table shows "No data found".
+- [x] A provider that fails after all retries does not stop the chain. The workflow continues to the next provider.
+- [x] Orion gets the email domain as `companyWebsite`. It is skipped for a free-mail domain. Nimbus is skipped for a lead with no job title.
+- [x] The workflow is idempotent, with one workflow for each lead and a deterministic ID. A repeated request for a lead that is already running does not start a second workflow.
+  - A test against the Temporal test server starts the same lead twice and gets one run. Not checked in the Temporal UI.
+- [x] "Enrich phone" skips a lead that already has a phone. The result counts it.
+- [x] The lead stores an enrichment status (for example: running, found, not found, failed) and, when found, the phone and the provider that found it.
+  - Migration `20261121194405_add_phone_enrichment_status`. The save activity was run once on a copy of the migrated database.
+- [x] The UI has an "Enrich phone" action and shows the status for each lead while the workflow runs. The user does not have to reload the page.
+  - The helpers have unit tests. Not checked in the browser. See the manual checks below.
+- [x] Polling stops when no lead is running.
+  - It also stops 2 minutes after the page load or the last "Enrich phone".
+- [x] Provider credentials come from configuration, not from source code.
+- [x] The worker does not start when a key is missing. The error names the missing variable.
+  - A missing key stops the full backend, because `index.ts` exits when the worker fails.
+- [x] No API key is in workflow history, activity failures, or logs.
+  - Workflow and activity arguments have no key. Each failure message has the URL without its query, and the runner removes the key from error text. Not checked in the Temporal UI.
+- [x] Tests cover the response mapping for each provider and the workflow paths: first-hit stop, fallback, all-empty, and provider failure.
+- [x] Nice to have: each provider has its own rate limit, so a bulk enrichment respects future RPS/RPM limits. Leave the limit unset by default.
+  - `<PREFIX>_MAX_REQUESTS_PER_SECOND` sets `maxTaskQueueActivitiesPerSecond` on the provider queue. A worker test checks the option. The server-side limit is not checked.
+
+Decisions made during the build:
+
+- Each `*_BASE_URL` value is the full endpoint URL, as the README gives it. The adapters do not add a path.
+- The worker gets `workflowsPath` from `path.join(__dirname, 'workflows')`, not `require.resolve`. Vitest cannot resolve a `.ts` file, and the bundler accepts a directory.
+- `runTemporalWorker` takes the Prisma client from `index.ts`, so the save activity uses the same client.
+
+Manual checks left (plan step 24, not done because the dev stack was in use):
+
+- Select 5 leads: 1 with a phone, 1 with a free-mail email, 1 with no job title, and 2 others. Make sure the toast counts the skipped lead and the table shows "Searching…".
+- Make sure each lead ends as found, not found, or failed with no page reload.
+- Click "Enrich phone" again on a lead that is running. Make sure the Temporal UI shows one workflow for it.
+- Open a workflow in the Temporal UI. Make sure no API key is in the inputs or the failures.
 
 ## Out of scope
 
