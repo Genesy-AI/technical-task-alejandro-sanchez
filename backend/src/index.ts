@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { runEmailVerificationWorkflow, verifyLeadEmails } from './emailVerification'
+import { readLeadIds, startLeadPhoneEnrichments, startPhoneEnrichmentWorkflow } from './phoneEnrichment'
 import { getTemporalClient } from './temporalClient'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
 import { normalizeCountryCode } from './utils/countryCode'
@@ -316,6 +317,35 @@ app.post('/leads/verify-emails', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error verifying emails:', error)
     res.status(500).json({ error: 'Failed to verify emails' })
+  }
+})
+
+app.post('/leads/enrich-phones', async (req: Request, res: Response) => {
+  const leadIds = readLeadIds(req.body as unknown)
+
+  if (!leadIds) {
+    return res.status(400).json({ error: 'leadIds must be a non-empty array of lead ids' })
+  }
+
+  try {
+    const leads = await prisma.lead.findMany({ where: { id: { in: leadIds } } })
+
+    if (leads.length === 0) {
+      return res.status(404).json({ error: 'No leads found with the provided IDs' })
+    }
+
+    const client = await getTemporalClient()
+    const report = await startLeadPhoneEnrichments(leads, {
+      saveStatus: async (leadId, status) => {
+        await prisma.lead.update({ where: { id: leadId }, data: { phoneEnrichmentStatus: status } })
+      },
+      startEnrichment: (lead) => startPhoneEnrichmentWorkflow(client, lead),
+    })
+
+    res.json(report)
+  } catch (error) {
+    console.error('Error starting phone enrichment:', error)
+    res.status(500).json({ error: 'Failed to start phone enrichment' })
   }
 })
 
