@@ -10,6 +10,8 @@ import { EmailVerificationSummary, summarizeEmailVerification } from '../utils/e
 const VERIFY_EMAILS_TOAST_ID = 'verify-emails'
 // A toast that names failed emails stays longer, so the user can read the list.
 const FAILED_EMAILS_TOAST_DURATION_MS = 8000
+// The import stores each profile URL with this prefix. The table shows only `in/<slug>` to keep the column narrow.
+const LINKEDIN_PROFILE_PREFIX = 'https://www.linkedin.com/'
 
 function showVerificationSummary({ message, tone }: EmailVerificationSummary): void {
   const options = { id: VERIFY_EMAILS_TOAST_ID, style: { whiteSpace: 'pre-line' as const } }
@@ -254,6 +256,15 @@ export const LeadsList: FC = () => {
                   Country
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Phone
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  Years at Company
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                  LinkedIn
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                   Message
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
@@ -293,6 +304,28 @@ export const LeadsList: FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.countryCode || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{lead.phoneNumber || '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{lead.yearsAtCompany ?? '-'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {lead.linkedinUrl ? (
+                        <a
+                          href={lead.linkedinUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {lead.linkedinUrl.replace(LINKEDIN_PROFILE_PREFIX, '')}
+                        </a>
+                      ) : (
+                        '-'
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900 max-w-xs truncate" title={lead.message || ''}>
