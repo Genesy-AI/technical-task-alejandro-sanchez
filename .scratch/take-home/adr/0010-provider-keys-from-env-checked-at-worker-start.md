@@ -4,8 +4,8 @@ Phone provider keys and endpoint URLs come from environment variables, not from 
 
 ## Consequences
 
-- Warning: the backend process exits when a key or URL is missing, because the worker runs inside it. Create `backend/.env` from `.env.sample` before `mise run dev`.
-- The mise `dev` task runs node with `--env-file-if-exists=.env`, so no new dependency is needed. A plain `pnpm dev` in `backend/` does not load the file.
+- Warning: the backend process exits when a key or URL is missing, because the worker runs inside it. Create `backend/.env` from `.env.sample` before you start the backend.
+- The backend `dev` and `start` scripts and the mise `dev` task all run node with `--env-file-if-exists=.env`. No new dependency is needed, and Node 22.9 or later is required.
 - Only activity code reads the keys. Never pass a key as a workflow or activity argument: Temporal stores arguments as plain text in its history, and the Temporal UI shows them.
 - The runner removes the key from every URL and error message, because Nimbus sends its key in the query string.
 - Error messages name variables, never values.
