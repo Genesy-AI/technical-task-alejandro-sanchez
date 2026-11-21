@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { parseCsv, isValidEmail } from './csvParser'
-
 describe('isValidEmail', () => {
   it('should return true for valid email addresses', () => {
     expect(isValidEmail('test@example.com')).toBe(true)
@@ -66,6 +65,7 @@ John,Doe,john.doe@example.com,Developer,US,Tech Corp`
       companyName: 'Tech Corp',
       isValid: true,
       errors: [],
+      warnings: [],
       rowIndex: 2,
     })
   })
@@ -222,5 +222,49 @@ Jane,Johnson,jane@example.com`
     expect(result[0].lastName).toBe('Doe')
     expect(result[0].email).toBe('john@example.com')
     expect(result[0].isValid).toBe(true)
+  })
+})
+
+describe('parseCsv country codes', () => {
+  const parseCountry = (countryCode: string) =>
+    parseCsv(`firstName,lastName,email,countryCode\nJohn,Doe,john@example.com,${countryCode}`)[0]
+
+  it('keeps a valid code with no warning', () => {
+    const lead = parseCountry('ES')
+
+    expect(lead.countryCode).toBe('ES')
+    expect(lead.warnings).toEqual([])
+  })
+
+  it('uppercases a lowercase code', () => {
+    expect(parseCountry('es').countryCode).toBe('ES')
+  })
+
+  it('maps UK to GB with no warning', () => {
+    const lead = parseCountry('UK')
+
+    expect(lead.countryCode).toBe('GB')
+    expect(lead.warnings).toEqual([])
+  })
+
+  it.each(['XXX', '12', 'XX'])('drops %s with a warning that names the value', (invalidCode) => {
+    const lead = parseCountry(invalidCode)
+
+    expect(lead.countryCode).toBeUndefined()
+    expect(lead.warnings).toEqual([`Invalid country code "${invalidCode}" dropped`])
+  })
+
+  it('keeps a lead with an invalid code valid', () => {
+    const lead = parseCountry('XXX')
+
+    expect(lead.isValid).toBe(true)
+    expect(lead.errors).toEqual([])
+  })
+
+  it('gives no code and no warning for an empty value', () => {
+    const lead = parseCountry('')
+
+    expect(lead.countryCode).toBeUndefined()
+    expect(lead.warnings).toEqual([])
   })
 })

@@ -5,6 +5,13 @@ import toast from 'react-hot-toast'
 import { api } from '../api'
 import { CsvLead, parseCsv } from '../utils/csvParser'
 
+/**
+ * Counts the country codes the parser dropped.
+ * Today the parser gives warnings only for dropped country codes.
+ */
+const countDroppedCountryCodes = (leads: CsvLead[]): number =>
+  leads.reduce((count, lead) => count + lead.warnings.length, 0)
+
 interface CsvImportModalProps {
   isOpen: boolean
   onClose: () => void
@@ -39,6 +46,8 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
       valid: validLeads.length,
       invalid: invalidLeads.length,
       duplicatesInCsv: duplicatesInCsv.length,
+      countryCodesDropped: countDroppedCountryCodes(csvData),
+      importedCountryCodesDropped: countDroppedCountryCodes(validLeads),
     }
   }, [csvData])
 
@@ -113,6 +122,11 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
       }
       if (data.invalidLeads > 0) {
         message += ` (${data.invalidLeads} invalid leads excluded)`
+      }
+      // The preview drops invalid codes before the request, so the server count is usually zero.
+      const countryCodesDropped = stats.importedCountryCodesDropped + data.countryCodesDropped
+      if (countryCodesDropped > 0) {
+        message += ` (${countryCodesDropped} invalid country codes dropped)`
       }
 
       toast.success(message)
@@ -247,7 +261,7 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
             <div className="space-y-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Import Summary</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="bg-white rounded p-3 text-center">
                     <div className="text-lg font-semibold text-gray-900">{stats.total}</div>
                     <div className="text-xs text-gray-500">Total Rows</div>
@@ -263,6 +277,10 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                   <div className="bg-white rounded p-3 text-center">
                     <div className="text-lg font-semibold text-yellow-600">{stats.duplicatesInCsv}</div>
                     <div className="text-xs text-gray-500">Duplicates in CSV</div>
+                  </div>
+                  <div className="bg-white rounded p-3 text-center">
+                    <div className="text-lg font-semibold text-amber-600">{stats.countryCodesDropped}</div>
+                    <div className="text-xs text-gray-500">Country Codes Dropped</div>
                   </div>
                 </div>
               </div>
@@ -285,7 +303,13 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                         Company
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Country
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                         Errors
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Warnings
                       </th>
                     </tr>
                   </thead>
@@ -309,7 +333,11 @@ export const CsvImportModal: FC<CsvImportModalProps> = ({ isOpen, onClose }) => 
                         </td>
                         <td className="px-3 py-2 text-sm text-gray-900">{lead.email || '-'}</td>
                         <td className="px-3 py-2 text-sm text-gray-900">{lead.companyName || '-'}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{lead.countryCode || '-'}</td>
                         <td className="px-3 py-2 text-sm text-red-600">{lead.errors.join(', ') || '-'}</td>
+                        <td className="px-3 py-2 text-sm text-amber-600">
+                          {lead.warnings.join(', ') || '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
