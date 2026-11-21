@@ -2,16 +2,33 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FC, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../api'
+import { Lead } from '../api/types/leads/lead'
 import { MessageTemplateModal } from './MessageTemplateModal'
 import { CsvImportModal } from './CsvImportModal'
 import { EmailVerificationSummary, summarizeEmailVerification } from '../utils/emailVerificationSummary'
+import {
+  getLeadsRefetchInterval,
+  getPhoneCellState,
+  PhoneCellTone,
+  PhoneEnrichmentStartSummary,
+  summarizePhoneEnrichmentStart,
+} from '../utils/phoneEnrichment'
 
 // One toast id, so that the result toast replaces the loading toast.
 const VERIFY_EMAILS_TOAST_ID = 'verify-emails'
+const ENRICH_PHONES_TOAST_ID = 'enrich-phones'
+// A toast with leads that could not start stays longer, so the user can read the counts.
+const FAILED_STARTS_TOAST_DURATION_MS = 8000
 // A toast that names failed emails stays longer, so the user can read the list.
 const FAILED_EMAILS_TOAST_DURATION_MS = 8000
 // The import stores each profile URL with this prefix. The table shows only `in/<slug>` to keep the column narrow.
 const LINKEDIN_PROFILE_PREFIX = 'https://www.linkedin.com/'
+const PHONE_CELL_CLASSES: Record<PhoneCellTone, string> = {
+  value: 'text-gray-900',
+  pending: 'text-blue-600 animate-pulse',
+  empty: 'text-gray-500',
+  error: 'text-red-600',
+}
 
 function showVerificationSummary({ message, tone }: EmailVerificationSummary): void {
   const options = { id: VERIFY_EMAILS_TOAST_ID, style: { whiteSpace: 'pre-line' as const } }
@@ -24,17 +41,31 @@ function showVerificationSummary({ message, tone }: EmailVerificationSummary): v
   }
 }
 
+function showEnrichmentSummary({ message, tone }: PhoneEnrichmentStartSummary): void {
+  const options = { id: ENRICH_PHONES_TOAST_ID }
+  if (tone === 'success') {
+    toast.success(message, options)
+  } else if (tone === 'warning') {
+    toast(message, { ...options, icon: '⚠️', duration: FAILED_STARTS_TOAST_DURATION_MS })
+  } else {
+    toast.error(message, { ...options, duration: FAILED_STARTS_TOAST_DURATION_MS })
+  }
+}
+
 export const LeadsList: FC = () => {
   const [selectedLeads, setSelectedLeads] = useState<number[]>([])
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false)
   const [isEnrichDropdownOpen, setIsEnrichDropdownOpen] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
+  // Polling stops 2 minutes after this time. "Enrich phone" sets it again.
+  const [pollingStartedAt, setPollingStartedAt] = useState(() => Date.now())
   const queryClient = useQueryClient()
 
   const leads = useQuery({
     queryKey: ['leads', 'getMany'],
     queryFn: async () => api.leads.getMany(),
     retry: false,
+    refetchInterval: (query) => getLeadsRefetchInterval(query.state.data, pollingStartedAt, Date.now()),
   })
   
 
@@ -68,6 +99,21 @@ export const LeadsList: FC = () => {
     },
     onError: () => {
       toast.error('Failed to verify emails. Please try again.', { id: VERIFY_EMAILS_TOAST_ID })
+    }
+  })
+
+  const enrichPhonesMutation = useMutation({
+    mutationFn: async (ids: number[]) => api.leads.enrichPhones({ leadIds: ids }),
+    onMutate: () => {
+      setIsEnrichDropdownOpen(false)
+    },
+    onSuccess: (data) => {
+      setPollingStartedAt(Date.now())
+      queryClient.invalidateQueries({ queryKey: ['leads', 'getMany'] })
+      showEnrichmentSummary(summarizePhoneEnrichmentStart(data))
+    },
+    onError: () => {
+      toast.error('Failed to start phone enrichment. Please try again.', { id: ENRICH_PHONES_TOAST_ID })
     }
   })
 
@@ -177,6 +223,18 @@ export const LeadsList: FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12H8m8 0a8 8 0 11-16 0 8 8 0 0116 0zm-8 0V4" />
                         </svg>
                         {verifyEmailsMutation.isPending ? 'Verifying...' : 'Verify Email'}
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => enrichPhonesMutation.mutate(selectedLeads)}
+                      disabled={enrichPhonesMutation.isPending}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <div className="flex items-center">
+                        <svg className="mr-3 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        {enrichPhonesMutation.isPending ? 'Starting...' : 'Enrich Phone'}
                       </div>
                     </button>
                     <button
@@ -306,7 +364,7 @@ export const LeadsList: FC = () => {
                     <div className="text-sm text-gray-900">{lead.countryCode || '-'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{lead.phoneNumber || '-'}</div>
+                    <PhoneCell lead={lead} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{lead.yearsAtCompany ?? '-'}</div>
@@ -381,6 +439,21 @@ export const LeadsList: FC = () => {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
       />
+    </div>
+  )
+}
+
+interface PhoneCellProps {
+  lead: Lead
+}
+
+// Shows the phone and its provider, or the enrichment status when the lead has no phone.
+const PhoneCell: FC<PhoneCellProps> = ({ lead }) => {
+  const { text, detail, tone } = getPhoneCellState(lead)
+  return (
+    <div className={`text-sm ${PHONE_CELL_CLASSES[tone]}`}>
+      <div>{text}</div>
+      {detail && <div className="text-xs text-gray-500">{detail}</div>}
     </div>
   )
 }
