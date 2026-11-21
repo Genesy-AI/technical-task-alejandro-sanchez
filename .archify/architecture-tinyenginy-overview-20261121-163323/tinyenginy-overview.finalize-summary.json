@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/aesbetancourt/Dev/personal/interviews/genesy/technical-task-alejandro-sanchez/.archify/architecture-tinyenginy-overview-20261121-163323/candidate.json",
+    "sha256": "f9527b4dbf8ac356c3a13b498fdca6bf5a874155e8045af2a8ed1cea479e9590",
+    "bytes": 3514
+  },
+  "artifact": {
+    "path": "/Users/aesbetancourt/Dev/personal/interviews/genesy/technical-task-alejandro-sanchez/.archify/architecture-tinyenginy-overview-20261121-163323/tinyenginy-overview.html",
+    "sha256": "b0551727baeccfd77fb00b614012c4a8cbd4c202b8f889a0dcf4242e09cfafc5",
+    "bytes": 844066
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/aesbetancourt/Dev/personal/interviews/genesy/technical-task-alejandro-sanchez/.archify/architecture-tinyenginy-overview-20261121-163323/tinyenginy-overview.finalize.json",
+    "summaryReceipt": "/Users/aesbetancourt/Dev/personal/interviews/genesy/technical-task-alejandro-sanchez/.archify/architecture-tinyenginy-overview-20261121-163323/tinyenginy-overview.finalize-summary.json",
+    "browserCheckReceipt": "/Users/aesbetancourt/Dev/personal/interviews/genesy/technical-task-alejandro-sanchez/.archify/architecture-tinyenginy-overview-20261121-163323/tinyenginy-overview.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-16T16:38:33.369Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 5597,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  }
+}
