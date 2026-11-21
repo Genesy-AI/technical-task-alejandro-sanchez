@@ -6,7 +6,7 @@ The message composition UX must keep working as the field list grows. Today the 
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Diagnosis
 
