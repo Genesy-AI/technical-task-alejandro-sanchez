@@ -75,7 +75,6 @@ A change is done when all of these pass in each app you touched:
 
 Known failures from before your change (remove each line when it is fixed):
 
-- Frontend `pnpm build` fails with TS2741 in `src/api/mutations/useApiMutation.ts`. The optimistic lead has no `emailVerified`.
 - Frontend `pnpm lint` does not run. ESLint 9 needs a flat config, and the app has only `.eslintrc.cjs`.
 
 ## Agent skills
