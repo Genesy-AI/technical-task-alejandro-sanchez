@@ -143,34 +143,49 @@ To add a template field later: add it to the schema and the lead types, then add
 
 Data, API, and table:
 
-- [ ] A new migration adds the three fields. Existing leads keep their data, and the new fields are empty.
-- [ ] The API returns the new fields on every endpoint that returns a lead.
-- [ ] The leads table shows the three fields, with a placeholder when a value is empty.
-- [ ] The frontend lead types include the new fields. This fixes the existing TS2741 build error on the optimistic lead. Remove that entry from the known failures in CLAUDE.md.
+- [x] A new migration adds the three fields. Existing leads keep their data, and the new fields are empty.
+  - Migration `20261121191853_add_phone_years_linkedin`. After it ran, the local database had 25 leads, 24 country codes, and no values in the new columns.
+- [x] The API returns the new fields on every endpoint that returns a lead.
+  - The routes return the full Prisma row, so the new columns are included. Not checked with a running backend, because the dev stack was in use.
+- [x] The leads table shows the three fields, with a placeholder when a value is empty.
+  - Not checked in the browser. See the manual checks below.
+- [x] The frontend lead types include the new fields. This fixes the existing TS2741 build error on the optimistic lead. Remove that entry from the known failures in CLAUDE.md.
 
 CSV import:
 
-- [ ] CSV import maps the phone, years-at-company, and LinkedIn columns. It accepts the header aliases in the example files (`phoneNumber`, `yearsInRole`).
-- [ ] The import preview flags a non-numeric or negative years value and a malformed LinkedIn URL. The row still imports without the bad value.
-- [ ] The bulk import endpoint also checks years and LinkedIn values. It does not depend on the client check alone.
-- [ ] A valid LinkedIn profile URL is stored as `https://www.linkedin.com/in/<slug>`.
+- [x] CSV import maps the phone, years-at-company, and LinkedIn columns. It accepts the header aliases in the example files (`phoneNumber`, `yearsInRole`).
+  - A test runs the parser on `docs/leads-ok-1.csv` and gets the phone and years of each row.
+- [x] The import preview flags a non-numeric or negative years value and a malformed LinkedIn URL. The row still imports without the bad value.
+  - Parser tests cover `-3`, `abc`, `2.5`, and `example.com/in/x`. The preview UI is not checked in the browser.
+- [x] The bulk import endpoint also checks years and LinkedIn values. It does not depend on the client check alone.
+  - The normalizers have unit tests. The route itself has no test, because `index.ts` starts the server on import.
+- [x] A valid LinkedIn profile URL is stored as `https://www.linkedin.com/in/<slug>`.
 
 Message composition:
 
-- [ ] One list defines the template fields. The message generator and the composition modal both use it.
-- [ ] Each field has a human-readable label, separate from its template key.
-- [ ] Users can find and insert a field by searching its label or key.
-- [ ] The picker works with the keyboard: arrow keys, Enter, and Escape.
-- [ ] The three new fields work in templates and in generated messages.
-- [ ] An unknown field or an empty value still gives a clear error for each lead.
-- [ ] A value that contains `$&` or `$1` is inserted as it is.
-- [ ] To add a new template field, a developer changes only the field list and the lead data.
+- [x] One list defines the template fields. The message generator and the composition modal both use it.
+- [x] Each field has a human-readable label, separate from its template key.
+- [x] Users can find and insert a field by searching its label or key.
+- [x] The picker works with the keyboard: arrow keys, Enter, and Escape.
+  - A jsdom test drives the picker with key events. Not checked in the browser.
+- [x] The three new fields work in templates and in generated messages.
+- [x] An unknown field or an empty value still gives a clear error for each lead.
+- [x] A value that contains `$&` or `$1` is inserted as it is.
+- [x] To add a new template field, a developer changes only the field list and the lead data.
+  - Backend: the schema, `TemplateLead`, and one entry in `templateFields.ts`. Frontend: the `Lead` type only.
 
 Tests:
 
-- [ ] Unit tests cover CSV mapping and validation for the new fields.
-- [ ] Tests cover the message generator with the new fields and the field-list lookup.
-- [ ] Tests cover the picker search function.
+- [x] Unit tests cover CSV mapping and validation for the new fields.
+- [x] Tests cover the message generator with the new fields and the field-list lookup.
+- [x] Tests cover the picker search function.
+
+Manual checks left (plan step 18, not done because the dev stack was in use):
+
+- Import `docs/leads-ok-1.csv`. Make sure the table shows phone and years.
+- Import a CSV with years `-3`, years `abc`, and the LinkedIn value `example.com/in/x`. Make sure the preview warns and the rows import without those values.
+- Search "phone" and "years" in the picker. Insert both.
+- Generate a message with `{phoneNumber}` for leads with and without a phone. Make sure each lead without a phone gets the error.
 
 ## Out of scope
 
