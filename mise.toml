@@ -1,0 +1,19 @@
+[tools]
+node = "22"
+pnpm = "12"
+temporal = "1"
+
+[tasks.db]
+description = "Run Prisma migrations and generate the Prisma client"
+dir = "{{config_root}}/backend"
+run = ["pnpm migrate:dev", "pnpm gen:prisma"]
+
+[tasks.dev]
+description = "Start Temporal, the backend, and the frontend together"
+run = """
+temporal server start-dev &
+(cd backend && until nc -z localhost 7233; do sleep 1; done && pnpm exec nodemon --ext ts,json --exec 'node --env-file-if-exists=.env --inspect -r ts-node/register' ./src/index.ts) &
+(cd frontend && pnpm dev) &
+trap 'kill 0' EXIT
+wait
+"""

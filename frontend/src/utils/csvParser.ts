@@ -1,4 +1,10 @@
 import Papa from 'papaparse'
+import { normalizeCountryCode } from './countryCode'
+import { normalizeLinkedinUrl } from './linkedinUrl'
+import { normalizeYearsAtCompany } from './yearsAtCompany'
+
+/** An optional field whose invalid value the parser drops with a warning. */
+export type DroppableCsvField = 'countryCode' | 'yearsAtCompany' | 'linkedinUrl'
 
 export interface CsvLead {
   firstName: string
@@ -7,10 +13,29 @@ export interface CsvLead {
   jobTitle?: string
   countryCode?: string
   companyName?: string
+  phoneNumber?: string
+  yearsAtCompany?: number
+  linkedinUrl?: string
   isValid: boolean
   errors: string[]
+  /** Problems that do not block the import, such as a dropped country code. */
+  warnings: string[]
+  /** The fields whose invalid value the parser dropped. Each one also has an entry in `warnings`. */
+  droppedFields: DroppableCsvField[]
   rowIndex: number
 }
+
+/**
+ * Counts the leads that had an invalid value of one field dropped.
+ *
+ * @param leads - The parsed leads.
+ * @param field - The field to count.
+ * @returns The number of leads with a dropped value for `field`.
+ * @example
+ * countDroppedValues(parseCsv(csv), 'yearsAtCompany') // 2
+ */
+export const countDroppedValues = (leads: CsvLead[], field: DroppableCsvField): number =>
+  leads.filter((lead) => lead.droppedFields.includes(field)).length
 
 export const isValidEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -49,6 +74,14 @@ export const parseCsv = (content: string): CsvLead[] => {
     if (Object.values(row).every((value) => !value)) return
 
     const lead: Partial<CsvLead> = { rowIndex: index + 2 }
+    const warnings: string[] = []
+    const droppedFields: DroppableCsvField[] = []
+    const recordDroppedValue = (field: DroppableCsvField, warning?: string) => {
+      if (warning) {
+        warnings.push(warning)
+        droppedFields.push(field)
+      }
+    }
 
     Object.entries(row).forEach(([header, value]) => {
       const normalizedHeader = header.toLowerCase().replace(/[^a-z]/g, '')
@@ -67,12 +100,35 @@ export const parseCsv = (content: string): CsvLead[] => {
         case 'jobtitle':
           lead.jobTitle = trimmedValue || undefined
           break
-        case 'countrycode':
-          lead.countryCode = trimmedValue || undefined
+        case 'countrycode': {
+          const { countryCode, warning } = normalizeCountryCode(trimmedValue)
+          lead.countryCode = countryCode
+          recordDroppedValue('countryCode', warning)
           break
+        }
         case 'companyname':
           lead.companyName = trimmedValue || undefined
           break
+        case 'phonenumber':
+        case 'phone':
+          lead.phoneNumber = trimmedValue || undefined
+          break
+        // The example files name this column `yearsInRole`. The import reads it as years at the company.
+        case 'yearsatcompany':
+        case 'yearsinrole': {
+          const { yearsAtCompany, warning } = normalizeYearsAtCompany(trimmedValue)
+          lead.yearsAtCompany = yearsAtCompany
+          recordDroppedValue('yearsAtCompany', warning)
+          break
+        }
+        case 'linkedinurl':
+        case 'linkedin':
+        case 'linkedinprofile': {
+          const { linkedinUrl, warning } = normalizeLinkedinUrl(trimmedValue)
+          lead.linkedinUrl = linkedinUrl
+          recordDroppedValue('linkedinUrl', warning)
+          break
+        }
       }
     })
 
@@ -96,6 +152,8 @@ export const parseCsv = (content: string): CsvLead[] => {
       email: lead.email || '',
       isValid: errors.length === 0,
       errors,
+      warnings,
+      droppedFields,
     } as CsvLead)
   })
 

@@ -1,8 +1,14 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
-import { Connection, Client } from '@temporalio/client'
-import { verifyEmailWorkflow } from './workflows'
+import { runEmailVerificationWorkflow, verifyLeadEmails } from './emailVerification'
+import { readLeadIds, startLeadPhoneEnrichments, startPhoneEnrichmentWorkflow } from './phoneEnrichment'
+import { getTemporalClient } from './temporalClient'
 import { generateMessageFromTemplate } from './utils/messageGenerator'
+import { normalizeCountryCode } from './utils/countryCode'
+import { normalizeLinkedinUrl } from './utils/linkedinUrl'
+import { normalizePhoneNumber } from './utils/phoneNumber'
+import { normalizeYearsAtCompany } from './utils/yearsAtCompany'
+import { listTemplateFieldSummaries } from './utils/templateFields'
 import { runTemporalWorker } from './worker'
 const prisma = new PrismaClient()
 const app = express()
@@ -36,6 +42,11 @@ app.post('/leads', async (req: Request, res: Response) => {
     },
   })
   res.json(lead)
+})
+
+// Declare this route before `/leads/:id`. If not, Express sends the request to `/leads/:id`.
+app.get('/leads/template-fields', (req: Request, res: Response) => {
+  res.json(listTemplateFieldSummaries())
 })
 
 app.get('/leads/:id', async (req: Request, res: Response) => {
@@ -217,9 +228,15 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
     })
 
     let importedCount = 0
+    let countryCodesDropped = 0
+    let yearsAtCompanyDropped = 0
+    let linkedinUrlsDropped = 0
     const errors: Array<{ lead: any; error: string }> = []
 
     for (const lead of uniqueLeads) {
+      const { countryCode, isDropped } = normalizeCountryCode(lead.countryCode)
+      const years = normalizeYearsAtCompany(lead.yearsAtCompany)
+      const linkedin = normalizeLinkedinUrl(lead.linkedinUrl)
       try {
         await prisma.lead.create({
           data: {
@@ -227,11 +244,23 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
             lastName: lead.lastName.trim(),
             email: lead.email.trim(),
             jobTitle: lead.jobTitle ? lead.jobTitle.trim() : null,
-            countryCode: lead.countryCode ? lead.countryCode.trim() : null,
+            countryCode,
             companyName: lead.companyName ? lead.companyName.trim() : null,
+            phoneNumber: normalizePhoneNumber(lead.phoneNumber),
+            yearsAtCompany: years.yearsAtCompany,
+            linkedinUrl: linkedin.linkedinUrl,
           },
         })
         importedCount++
+        if (isDropped) {
+          countryCodesDropped++
+        }
+        if (years.isDropped) {
+          yearsAtCompanyDropped++
+        }
+        if (linkedin.isDropped) {
+          linkedinUrlsDropped++
+        }
       } catch (error) {
         errors.push({
           lead: lead,
@@ -245,6 +274,9 @@ app.post('/leads/bulk', async (req: Request, res: Response) => {
       importedCount,
       duplicatesSkipped: validLeads.length - uniqueLeads.length,
       invalidLeads: leads.length - validLeads.length,
+      countryCodesDropped,
+      yearsAtCompanyDropped,
+      linkedinUrlsDropped,
       errors,
     })
   } catch (error) {
@@ -273,43 +305,47 @@ app.post('/leads/verify-emails', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No leads found with the provided IDs' })
     }
 
-    const connection = await Connection.connect({ address: 'localhost:7233' })
-    const client = new Client({ connection, namespace: 'default' })
+    const client = await getTemporalClient()
+    const report = await verifyLeadEmails(leads, {
+      runVerification: (lead) => runEmailVerificationWorkflow(client, lead),
+      saveVerification: async (leadId, isVerified) => {
+        await prisma.lead.update({ where: { id: leadId }, data: { emailVerified: isVerified } })
+      },
+    })
 
-    let verifiedCount = 0
-    const results: Array<{ leadId: number; emailVerified: boolean }> = []
-    const errors: Array<{ leadId: number; leadName: string; error: string }> = []
-
-    for (const lead of leads) {
-      try {
-        const isVerified = await client.workflow.execute(verifyEmailWorkflow, {
-          taskQueue: 'myQueue',
-          workflowId: `verify-email-${lead.id}-${Date.now()}`,
-          args: [lead.email],
-        })
-
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { emailVerified: Boolean(isVerified) },
-        })
-
-        results.push({ leadId: lead.id, emailVerified: isVerified })
-        verifiedCount += 1
-      } catch (error) {
-        errors.push({
-          leadId: lead.id,
-          leadName: `${lead.firstName} ${lead.lastName}`.trim(),
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
-      }
-    }
-
-    await connection.close()
-
-    res.json({ success: true, verifiedCount, results, errors })
+    res.json(report)
   } catch (error) {
     console.error('Error verifying emails:', error)
     res.status(500).json({ error: 'Failed to verify emails' })
+  }
+})
+
+app.post('/leads/enrich-phones', async (req: Request, res: Response) => {
+  const leadIds = readLeadIds(req.body as unknown)
+
+  if (!leadIds) {
+    return res.status(400).json({ error: 'leadIds must be a non-empty array of lead ids' })
+  }
+
+  try {
+    const leads = await prisma.lead.findMany({ where: { id: { in: leadIds } } })
+
+    if (leads.length === 0) {
+      return res.status(404).json({ error: 'No leads found with the provided IDs' })
+    }
+
+    const client = await getTemporalClient()
+    const report = await startLeadPhoneEnrichments(leads, {
+      saveStatus: async (leadId, status) => {
+        await prisma.lead.update({ where: { id: leadId }, data: { phoneEnrichmentStatus: status } })
+      },
+      startEnrichment: (lead) => startPhoneEnrichmentWorkflow(client, lead),
+    })
+
+    res.json(report)
+  } catch (error) {
+    console.error('Error starting phone enrichment:', error)
+    res.status(500).json({ error: 'Failed to start phone enrichment' })
   }
 })
 
@@ -317,7 +353,7 @@ app.listen(4000, () => {
   console.log('Express server is running on port 4000')
 })
 
-runTemporalWorker().catch((err) => {
+runTemporalWorker(prisma).catch((err) => {
   console.error(err)
   process.exit(1)
 })
