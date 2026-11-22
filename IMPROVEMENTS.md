@@ -10,7 +10,7 @@
 
 ## Summary
 
-The four take-home tickets are done, and both apps now build with no errors. Backend: 233 tests. Frontend: 128 tests. The remaining risk is in three areas:
+The four take-home tickets are done, and both apps now build with no errors. Backend: 233 tests. Frontend: 128 tests. This document looks at what is left from two sides: what the user and the business need from the product, and what the code needs to deliver it safely. The remaining risk is in three areas:
 
 1. **Data quality.** The CSV import still saves duplicate leads, and two lead endpoints write wrong data.
 2. **Engineering safety net.** There is no CI, no linter that runs, and no route tests. The frontend types are a manual copy of the backend.
@@ -18,7 +18,53 @@ The four take-home tickets are done, and both apps now build with no errors. Bac
 
 Recommendation: do the **Now** items first. They are small, they fix wrong data that users can see, and they make every later change safer. Do the **Before production** track before any real customer data goes into the app.
 
-## Current state
+## Product context
+
+TinyEnginy serves sales and growth teams. They turn a raw list of people into personalized outreach that reaches the right person on the right channel. Each step of the app is one stage of that job:
+
+```mermaid
+graph LR
+  I[Import a list] --> C[Clean and dedupe]
+  C --> E[Enrich: verify email, find phone]
+  E --> P[Personalize the message]
+  P --> S[Reach out]
+```
+
+| Stage | What the user needs | What this PR changed |
+|---|---|---|
+| Import | Trust that the list they uploaded is the list they got | Ticket 01: invalid country codes are dropped with a warning, not stored as noise |
+| Clean | One record for each real person | Not done yet: duplicates still get in (D1, D2) |
+| Enrich | Know which emails are safe to send to, and get a phone for each lead | Ticket 02: every verification ends with a clear result. Ticket 04: a phone from the best provider that has one |
+| Personalize | Messages that use what we know about the lead, at scale | Ticket 03: phone, years at company, and LinkedIn in templates, with a picker that scales with the field list |
+| Reach out | Out of scope for this app today | Sets the requirements for the stages before it |
+
+The value of the product is the quality of the data at the end of the chain. One bad record early in the chain costs more at each later stage: an enrichment credit, a message, and in the worst case the sender's reputation.
+
+### What each risk costs the user and the business
+
+| Risk | User impact | Business impact | Findings |
+|---|---|---|---|
+| Duplicate leads | The same person gets two messages. This looks like spam and hurts the brand of our customer. | We enrich the same person twice, so we pay providers twice. | D1, D2 |
+| Unverified emails reach outreach | Messages bounce. | A high bounce rate damages the sender domain, and future emails go to spam. This is the fastest way to lose a customer. | D6 |
+| Unclear enrichment results | The user cannot tell "no phone exists" from "the search failed", so they retry at random or give up. | Support tickets, and credits spent on retries. | D7 |
+| No provenance or retention rules | The user cannot answer a lead who asks "where did you get my number?". | GDPR exposure. B2B outreach in the EU depends on legitimate interest, a known source, and deletion on request. | P1, and see G1 below |
+| Slow or blocked actions | Large lists make the app feel broken. | Customers churn before they see value. | P5, P7 |
+
+## Product metrics
+
+Measure the funnel, not only the system. Instrument these before the next round of features, so each roadmap item can show its effect.
+
+| Metric | Definition | Why it matters |
+|---|---|---|
+| **Usable leads per import** (north star) | Leads that are deduplicated, have a verified email, and have at least one enrichment field, divided by rows uploaded | It is the product promise in one number: from a raw list to leads you can contact |
+| Import success rate | Rows imported, divided by rows uploaded, with the drop reasons | Shows if users fight the CSV format. A high drop rate for one reason means the UI must teach that rule |
+| Email verification coverage | Leads with a valid or invalid result, divided by leads checked | "Could not verify" must stay small. If it grows, the verifier or its limits need work |
+| Phone hit rate, per provider | Phones found, divided by lookups, for each provider and in total | Decides the provider order and which contracts to renew |
+| Cost per found phone | Provider spend, divided by phones found | The unit economics of enrichment. A cheap provider with a low hit rate can cost more per phone than an expensive one |
+| Time to first message | Time from the import to the first generated message | Measures how fast a new user gets value |
+| Template error rate | Leads with a template error, divided by leads in the generation request | Shows if the fields that users pick are often empty |
+
+## Technical state
 
 ```mermaid
 graph LR
@@ -126,6 +172,19 @@ Effort: **S** is up to 1 day, **M** is 2–4 days, **L** is 1–2 weeks.
 | **B3. Postgres and a persistent Temporal** | P4 | M | Prisma uses Postgres. Temporal runs as a cluster or Temporal Cloud. Secrets come from a secret manager, not from `.env`. |
 | **B4. Observability** | P6 | M | Structured JSON logs with a request ID, `GET /health`, error tracking, and Temporal metrics on a dashboard. |
 
+### Product bets
+
+These items change what the user can do, not only how the code works. Each one names the metric it must move.
+
+| Item | Why | Metric | Effort |
+|---|---|---|---|
+| **G1. Data provenance and GDPR basics** | Store the source of each field (the CSV file or the provider), and when we got it. Ticket 04 already stores `phoneProvider` and `phoneEnrichedAt`. Add a "delete this person" action that also blocks a new import of the same email. | Deletion requests answered in time | M |
+| **G2. Enrichment order by cost per found phone** | The README describes the providers by quality and speed, not by price. The order today is fixed: best data first. When we know each provider's price, order the chain by cost per found phone, or let the customer choose "best data" or "lowest cost". | Cost per found phone | S, after X6 |
+| **G3. Credits and cost visibility** | Show the user how many credits an enrichment will use before they start it, and skip leads that already have the data. Ticket 04 already skips leads with a phone. | Credits spent per usable lead | M |
+| **G4. Block outreach to risky emails** | Do not generate a message for an email that is invalid, or not checked yet. Show the user why. This protects the sender domain, which is our customer's most valuable asset. | Bounce rate after launch | S, after X2 |
+| **G5. Duplicate review on import** | After N1, show the duplicates in the preview with a choice: skip, update the existing lead, or keep both. A silent skip hides data that the user expected to see. | Import success rate | M |
+| **G6. Data freshness** | People change jobs, and phones and emails go stale. Mark data older than a set age, and offer a new enrichment for those leads. "Years at company" also helps here: a person new in a role is a good moment to reach out. | Usable leads per import, over time | M |
+
 ### Later: product depth
 
 | Item | Why | Effort |
@@ -154,6 +213,9 @@ graph LR
   X2 --> X3[X3 reconcile runs]
   X1 --> B1[B1 auth]
   B1 --> B2[B2 lock down API]
+  N1 --> G5[G5 duplicate review]
+  X6 --> G2[G2 cost-based order]
+  X2 --> G4[G4 block risky emails]
 ```
 
 - N1, N5, and X4 have no blockers, so they can start in parallel.
@@ -161,11 +223,14 @@ graph LR
 - Do X1 before auth (B1). Every route gets a checked body first, and auth then adds one field to each schema.
 - Do N4 before N6 and L6. The hook and the lint rules use the new tools.
 - Do L5 before L3. The split components then use translation keys from the start.
+- Add the product metrics before the product bets. Each bet must show its effect on a metric.
 
 ## Risks and open questions
 
 | Topic | Note |
 |---|---|
+| Provider pricing | G2 and G3 need the price of each provider call, and the README gives none. Ask the provider owners for it before any cost work. |
+| Who owns a lead | Today all leads are global. Before B1, decide if a lead belongs to a user or to a team. This changes dedupe (N1), credits (G3), and deletion (G1). |
 | Existing duplicates | N1 adds a unique index. The migration fails while duplicates exist. Decide with the product owner which row to keep: the oldest, the most complete, or a manual merge. |
 | "Years at company" vs "years in role" | The CSV column is `yearsInRole`. The import reads it as years at the current company. Confirm with the product owner that the two are the same for our users. |
 | Provider data quality | The providers return random phones for the same input. Before we pay for them in production, measure the hit rate and the accuracy for each provider on a known sample. |
